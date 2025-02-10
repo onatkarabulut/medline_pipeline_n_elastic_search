@@ -1,0 +1,25 @@
+name: medline_search
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pyyaml=5.4.1
+  - pip
+  - pip:
+      - six==1.16.0
+      - confluent-kafka
+      - requests==2.28.2
+      - anyio
+      - urllib3<2.0
+      - chardet<4.0
+      - elasticsearch==7.17.0
+      - tqdm
+      - click
+      - beautifulsoup4
+      - lxml
+      - rapidfuzz
+      - fastapi
+      - uvicorn
+      - "fastapi[standard]"
+      - apache-airflow
+      - apache-airflow-providers-postgres
