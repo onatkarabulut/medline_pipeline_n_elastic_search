@@ -15,10 +15,6 @@ sudo docker exec kafka-broker-1 kafka-topics --create \
   --replication-factor 2 \
   --bootstrap-server kafka-broker-1:9092
 
-### Control the port access
-nc -zv localhost 19092
-nc -zv localhost 29092
-
 ### Topic List
 sudo docker exec kafka-broker-1 kafka-topics --list --bootstrap-server kafka-broker-1:9092
 
@@ -27,3 +23,7 @@ sudo docker exec kafka-broker-1 kafka-topics --list --bootstrap-server kafka-bro
 bash start-all.sh
 
 https://medium.com/@Shamimw/steps-to-install-apache-airflow-using-docker-compose-9d663ea2e740
+
+
+
+sudo docker exec -it medline_pipeline_n_elastic_search_postgres_1 psql -U airflow -d airflow

@@ -91,7 +91,8 @@ class ElasticSearchQuery:
                 "detail_similarity": detail_score,
                 "final_score": final_score,
                 "matching_details": matching_details,
-                "document": source
+                "document": source,
+                "matcheds": matched_words
             })
         results.sort(key=lambda x: x["final_score"], reverse=True)
         return results[:top_n]

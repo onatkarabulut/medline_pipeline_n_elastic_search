@@ -1,4 +1,4 @@
-cd import logging
+import logging
 import json
 import hashlib
 import re
