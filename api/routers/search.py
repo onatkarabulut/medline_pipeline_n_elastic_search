@@ -2,9 +2,8 @@ import json
 from fastapi import APIRouter, HTTPException, Query
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from api.models.es_models import ExtendedSearch, SearchRequest,SuggestRequest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from api.models.es_models import SearchRequest,SuggestRequest
 from elastic_search.es import ElasticSearch
 from elastic_search.search_cli import ElasticSearchQuery
 

@@ -1,69 +1,138 @@
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.providers.http.operators.http import HttpOperator
-from airflow.providers.http.sensors.http import HttpSensor
-from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
 import json
+import time
+import logging
+import string
+import requests
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+import os
+import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from pipeline.producer import KafkaProducer
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class MedlineScraperProject:
+    def __init__(self):
+        self.base_url = "https://medlineplus.gov/druginfo"
+        self.producer = KafkaProducer()
+        self.drug_links = set()
+
+    def getCategories(self):
+        letters = string.ascii_uppercase
+        result = [self.base_url + "/drug_{}a.html".format(letter) for letter in letters]
+        result.append("https://medlineplus.gov/druginfo/drug_00.html")
+        return result
+
+    def getSource(self, url):
+        try:
+            r = requests.get(url)
+            if r.status_code == 200: 
+                return BeautifulSoup(r.content, "lxml")
+            else:
+                logging.error(f"Request failed with status code: {r.status_code}")
+                return None
+        except requests.RequestException as e:
+            logging.error(f"Request error: {e}")
+            return None
+
+    def getAllDrugsLinks(self, source):
+        if source is None:
+            return []
+
+        drug_elements = source.find("ul", attrs={"id": "index"}).find_all("li")
+        return set(
+            self.base_url + drug.find("a").get("href").replace(".", "", 1) for drug in drug_elements
+        )
+
+    def findAllDrugLinks(self):
+        categories = self.getCategories()
+        for category_link in tqdm(categories, unit=" category link"):
+            category_source = self.getSource(category_link)
+            result = self.getAllDrugsLinks(category_source)
+            self.drug_links.update(result)
+        return self.drug_links
+
+    def getSectionInfo(self, source, id_element):
+        try:
+            section_div = source.find("div", attrs={"id": id_element})
+            if not section_div:
+                return None
+            return {
+                "title": section_div.find("h2").text if section_div.find("h2") else "",
+                "content": section_div.find("div", attrs={"class": "section-body"}).text if section_div.find("div", attrs={"class": "section-body"}) else ""
+            }
+        except Exception:
+            return None
+
+    def scrapeDrugs(self, start=0, end=None):
+        links = list(self.findAllDrugLinks())
+        if end is None:
+            end = len(links)
+
+        scraped_data = []
+        for link in tqdm(links[start:end], unit=" drug link"):
+            drug_source = self.getSource(link)
+            if drug_source is None:
+                continue
+
+            drug_data = {
+                "name": drug_source.find("h1", attrs={"class": "with-also"}).text if drug_source.find("h1", attrs={"class": "with-also"}) else None,
+                "url": link,
+                "sections": [self.getSectionInfo(drug_source, sec) for sec in ["why", "how", "other-uses", "precautions", "special-dietary", "side-effects", "overdose", "other-information", "brand-name-1"]]
+            }
+
+            scraped_data.append(drug_data)
+            self.sendKafka(drug_data)
+            time.sleep(0.5)
+
+        self.flushKafka()
+        return scraped_data
+
+    def sendKafka(self, message={}, topic_name="medline-drugs"):
+        self.producer.produce(topic_name, json.dumps(message, ensure_ascii=False))
+
+    def flushKafka(self):
+        self.producer.flush()
+        logger.info("All messages produced successfully")
+
+def run_scraper(**kwargs):
+    scraper = MedlineScraperProject()
+    start = kwargs.get('start', 0)
+    end = kwargs.get('end', None)
+
+    data = scraper.scrapeDrugs(start, end)
+    
+    # Sonuçları Airflow XCom'a kaydet
+    return json.dumps(data)
+
+# Airflow DAG Tanımı
 default_args = {
     'owner': 'airflow',
-    'retries': 3,
-    'retry_delay': timedelta(minutes=2),
-    'retry_exponential_backoff': True,
-    'max_retry_delay': timedelta(minutes=10)
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
 }
 
 with DAG(
-    dag_id='advanced_scraping_dag',
+    'medline_scraper_dag',
     default_args=default_args,
-    schedule='@daily',
+    description='Medline scraper using Airflow DAG',
+    schedule_interval=None,  # Manuel çalıştırılacak
     start_date=datetime(2023, 1, 1),
     catchup=False,
-    max_active_runs=1,
-    max_active_tasks=2,
-    tags=['production', 'scraping']
 ) as dag:
 
-    start_pipeline = BashOperator(
-        task_id='start_pipeline',
-        bash_command='echo "Scraping STARTED at $(date)"'
+    scraping_task = PythonOperator(
+        task_id='run_scraper',
+        python_callable=run_scraper,
+        op_kwargs={'start': 0, 'end': 3}  # Burada start-end parametreleri ayarlanabilir
     )
 
-    trigger_scraping = HttpOperator(
-        task_id='trigger_scraping',
-        http_conn_id='my_fastapi_conn',
-        endpoint='extra/scraping/start',
-        method='POST',
-        data=json.dumps({"end": -1}),
-        headers={
-            'accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        response_check=lambda response: response.status_code == 200,
-        log_response=True,
-        extra_options={'timeout': 300}
-    )
-
-    monitor_scraping = HttpSensor(
-        task_id='monitor_scraping',
-        http_conn_id='my_fastapi_conn',
-        endpoint='extra/scraping/status',
-        method='GET',
-        response_check=lambda response: 'status' in response.json() and response.json()['status'] == 'completed',
-        poke_interval=60,
-        timeout=3600,
-        mode='reschedule'
-    )
-
-    cleanup_resources = BashOperator(
-        task_id='cleanup_resources',
-        bash_command='echo "Cleaning temporary files..." && sleep 10'
-    )
-
-    send_notification = BashOperator(
-        task_id='send_notification',
-        bash_command='echo "Scraping COMPLETED at $(date) | mail -s \'Scraping Report\' admin@example.com"'
-    )
-
-    start_pipeline >> trigger_scraping >> monitor_scraping 
-    monitor_scraping >> [cleanup_resources, send_notification]
+scraping_task
