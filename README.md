@@ -1,40 +1,72 @@
-### create conda env and activate ()zorunlu
-conda env create -f environment.yml
-conda activate medline_search
+# Medline Pipeline & ElasticSearch
 
-()zorunlu
-echo -e "AIRFLOW_UID=$(id -u)" > .env
-AIRFLOW_UID=50000
-docker-compose up airflow-init
+Welcome to the Medline Pipeline & ElasticSearch project! This project is designed to scrape drug data from MedlinePlus, send the data in real-time to two Kafka brokers, and then index the data in Elasticsearch. You can also interact with the data using a FastAPI service and perform fuzzy searches with a command-line tool.
 
-### compose up in silent mode()zorunlu
-sudo docker-compose up
+## What Does This Project Do?
 
-### wait until process complete()zorunlu!!!!!
+- **Scraping:**  
+  The project scrapes drug information from MedlinePlus. For example, you can run:
+  
+  ```bash
+  $ python3 scraping.py --end 10
+  #check out --> scraping/README.md
 
-### Create a topic()zorunlu!!!!!!
-sudo docker exec kafka-broker-1 kafka-topics --create \
-  --topic medline-drugs \
-  --partitions 2 \
-  --replication-factor 2 \
-  --bootstrap-server kafka-broker-1:9092
+This will scrape 10 drug records.
 
+  *  Data Flow:
+    The scraped data is sent to two Kafka brokers. From there, a Kafka consumer picks up the data and indexes it into Elasticsearch.
 
+  *  API Access:
+    A FastAPI service is provided so you can interact with Elasticsearch. You can use the API to perform queries, aggregations, scrolling searches, and more. (http://127.0.0.1:8000/docs#/)
 
-### Topic List
-sudo docker exec kafka-broker-1 kafka-topics --list --bootstrap-server kafka-broker-1:9092
+  *  Search:
+    Once the drug data is indexed, you can perform fuzzy searches using:
 
-### start fastapi()zorunlu
-fastapi run api/app.py --reload
+    $ python3 search_cli.py --query "Pentamidine injection" --top_n 10
 
-### start consumer()zorunlu
-python3 pipeline/consumer.py
+  *  This command displays the search results and saves them as a JSON file.
 
-### activate the scraper_DAG()zorunlu 
-python3 dags/scraper_DAG.py
+### How to Run the Project
 
-# if you wanna get a connect to psql
-sudo docker exec -it medline_pipeline_n_elastic_search_postgres_1 psql -U airflow -d airflow
+Before you start, please ensure your computer has the following installed:
 
+    Conda (with Python 3.10)
+    Docker & Docker Compose
 
+Starting All Services
 
+You can start all the services by running the provided script:
+
+    $ bash start-all.sh
+
+* This script will:
+
+    Check if the Conda environment (medline_search) exists and create it if needed.
+    Activate the Conda environment.
+    Start Docker Compose (which runs Kafka, Elasticsearch, Postgres, etc.) and log the output.
+    Wait a minute for all services to initialize.
+    Create and list the Kafka topic (medline-drugs).
+    Start the FastAPI server and Kafka consumer, and save logs in the logs/ folder.
+
+Scraping Data
+
+To scrape data from MedlinePlus, simply run:
+
+    $ python3 scraping.py --end 10
+
+This command scrapes 10 drug records. The scraped data is sent to Kafka and then indexed into Elasticsearch.
+Searching the Data
+
+Once the data is indexed, you can search it using the command-line tool:
+
+    $ python3 search_cli.py --query "Pentamidine injection" --top_n 10
+
+This will display the top 10 search results in your terminal and save them as a JSON file (by default, saved to ./elastic_search/results/results.json).
+
+A Quick Recap
+
+  * Start Services: Run bash start-all.sh to launch all services.
+  * Scrape Data: Use python3 scraping.py --end 10 to scrape drug data from MedlinePlus.
+  * Data Flow: The scraped data is sent to Kafka and then indexed into Elasticsearch.
+  * API: FastAPI provides endpoints for various Elasticsearch features. (http://127.0.0.1:8000/docs#/)
+  * Search: Query the indexed data with python3 search_cli.py and view/save results as JSON.

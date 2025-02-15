@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.routers import index, document, search, cluster, extra
+from routers import index, document, search, cluster, extra
 
 app = FastAPI(
     title="Medline Elasticsearch API",

@@ -55,7 +55,6 @@ class KafkaConsumer:
         
         self.es_client = ElasticSearch()
         self.es_index = "drug_data"
-
     def subscribe(self, topics: list):
         self.consumer.subscribe(topics)
         logger.info("Subscribed to topics: %s", topics)

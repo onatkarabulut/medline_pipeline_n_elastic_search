@@ -15,6 +15,7 @@ class KafkaProducer:
             'client.id': 'python-producer',
             'acks': 'all'
         }
+        self.test = "OK"
         self.producer = Producer(self.conf)
         logger.info("Producer initialized with config: %s", self.conf)
 

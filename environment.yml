@@ -21,6 +21,3 @@ dependencies:
       - fastapi
       - uvicorn
       - "fastapi[standard]"
-      - apache-airflow
-      - apache-airflow-providers-postgres
-      - apache-airflow-providers-http
