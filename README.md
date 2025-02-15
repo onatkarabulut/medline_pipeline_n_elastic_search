@@ -1,5 +1,7 @@
 # Medline Pipeline & ElasticSearch
 
+![Medline Search Architecture](medline_search.drawio(1).png)
+
 Welcome to the Medline Pipeline & ElasticSearch project! This project is designed to scrape drug data from MedlinePlus, send the data in real-time to two Kafka brokers, and then index the data in Elasticsearch. You can also interact with the data using a FastAPI service and perform fuzzy searches with a command-line tool.
 
 ## What Does This Project Do?
